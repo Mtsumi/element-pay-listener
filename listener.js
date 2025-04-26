@@ -5,7 +5,7 @@ const abi = require('./abi.json');
 
 console.log("🚀 Starting listener...");
 
-// WebSocket provider for real-time events
+// WebSocket provider
 const provider = new ethers.WebSocketProvider(process.env.RPC_WS_URL);
 
 provider._websocket?.on?.('open', () => {
@@ -28,7 +28,7 @@ setInterval(async () => {
 }, 10000);
 
 
-// 👉 OrderCreated listener
+// OrderCreated listener
 contract.on("OrderCreated", async (...args) => {
     console.log("whole args", args);
     const event = args[args.length - 1];
@@ -54,23 +54,31 @@ contract.on("OrderCreated", async (...args) => {
     }
   });
     
-// 👉 OrderSettled listener
+// OrderSettled listener
 contract.on("OrderSettled", async (...args) => {
   const event = args[args.length - 1];
   console.log("📥 OrderSettled event received");
+  console.log("🔍 Raw event.args:", event.args);
 
   const payload = {
-    orderId: event.args.orderId,
-    transactionHash: event.transactionHash
+    orderId: event.args[0],
+    transactionHash: event?.log?.transactionHash || ""
   };
 
   try {
-    const res = await axios.post(`${process.env.FASTAPI_BASE_URL}/events/order-settled`, payload);
+    const res = await axios.post(`${process.env.FASTAPI_BASE_URL}/events/order-settled`, payload, {
+      headers: {
+        "x-api-key": process.env.API_KEY,
+      }
+    });
     console.log("✅ OrderSettled forwarded:", res.data);
   } catch (err) {
     console.error("❌ Failed to forward OrderSettled:", err.message);
+    console.error("📦 Payload:", payload);
   }
 });
+
+
 
 // 👉 OrderRefunded listener
 contract.on("OrderRefunded", async (...args) => {
