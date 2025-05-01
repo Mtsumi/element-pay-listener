@@ -5,6 +5,12 @@ const abi = require('./abi.json');
 
 console.log("🚀 Starting listener...");
 
+//  debug api key
+if (process.env.API_KEY) {
+  console.log("🔑 Debug API Key:", process.env.API_KEY)
+  } else {
+  console.log("❌ No API key provided. Exiting...");
+  }
 // WebSocket provider
 const provider = new ethers.WebSocketProvider(process.env.RPC_WS_URL);
 
