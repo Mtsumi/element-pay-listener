@@ -69,7 +69,6 @@ contract.on("OrderSettled", async (...args) => {
 
   const payload = {
     orderId: event.args[0],
-    transactionHash: event?.log?.transactionHash || ""
   };
 
   try {
