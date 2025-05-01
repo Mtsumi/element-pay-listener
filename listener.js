@@ -5,12 +5,6 @@ const abi = require('./abi.json');
 
 console.log("🚀 Starting listener...");
 
-//  debug api key
-if (process.env.API_KEY) {
-  console.log("🔑 Debug API Key:", process.env.API_KEY)
-  } else {
-  console.log("❌ No API key provided. Exiting...");
-  }
 // WebSocket provider
 const provider = new ethers.WebSocketProvider(process.env.RPC_WS_URL);
 
@@ -36,29 +30,36 @@ setInterval(async () => {
 
 // OrderCreated listener
 contract.on("OrderCreated", async (...args) => {
-    console.log("whole args", args);
     const event = args[args.length - 1];
     console.log("📥 OrderCreated event received");
     console.log("🔍 Raw event.args:", event.args);
   
-    try {
-      const payload = {
-        orderId: event.args?.orderId?.toString?.() || "",
-        requester: event.args?.requester || "",
-        token: event.args?.token || "",
-        amount: event.args?.amount?.toString?.() || "0",
-        messageHash: event.args?.messageHash || "",
-        orderType: Number(event.args?.orderType ?? 0),
-        transactionHash: event.log?.transactionHash?.toString() || ""
-      };
-  
-      const res = await axios.post(`${process.env.FASTAPI_BASE_URL}/events/order-created`, payload);
-      console.log("✅ OrderCreated forwarded:", res.data);
-    } catch (err) {
-      console.error("❌ Failed to forward OrderCreated:", err.message);
-      console.error("🧾 Payload that caused error:", err.config?.data);
-    }
-  });
+    const payload = {
+      orderId: event.args?.orderId?.toString?.() || "",
+      requester: event.args?.requester || "",
+      token: event.args?.token || "",
+      amount: event.args?.amount?.toString?.() || "0",
+      messageHash: event.args?.messageHash || "",
+      orderType: Number(event.args?.orderType ?? 0),
+      transactionHash: event.log?.transactionHash?.toString() || ""
+    };
+
+      try {
+        const res = await axios.post(
+          `${process.env.FASTAPI_BASE_URL}/events/order-created`,
+          payload,
+          {
+            headers: {
+              "x-api-key": process.env.API_KEY,
+            }
+          }
+        );
+        console.log("✅ OrderCreated forwarded:", res.data);
+      } catch (err) {
+        console.error("❌ Failed to forward OrderCreated:", err.message);
+        console.error("📦 Payload:", payload);
+      }
+    });
     
 // OrderSettled listener
 contract.on("OrderSettled", async (...args) => {
