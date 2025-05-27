@@ -3,8 +3,7 @@ const { ethers } = require('ethers');
 const axios = require('axios');
 const abi = require('./abi.json');
 const fs = require('fs');
-const axiosRetry = require('axios-retry');
-
+const axiosRetry = require('axios-retry').default;
 console.log("🚀 Starting listener...");
 
 
