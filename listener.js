@@ -37,15 +37,9 @@ async function handleOrderSettled(...args) {
   const event = args[args.length - 1];
   console.log("📥 OrderSettled received:", event.args);
 
-  console.log("📥 OrderSettled received args:");
-  console.dir(args, { depth: null });
-
-  console.log("📦 Full event object:");
-  console.dir(event, { depth: null });
-
   const payload = {
     orderId: event.args?.orderId || event.args[0],
-    transactionHash: event.transactionHash
+    transactionHash: event?.log?.transactionHash || null
   };
 
   try {
@@ -65,7 +59,8 @@ async function handleOrderRefunded(...args) {
   console.log("📥 OrderRefunded received:", event.args);
 
   const payload = {
-    orderId: event.args?.orderId || event.args[0]
+    orderId: event.args?.orderId || event.args[0],
+    transactionHash: event?.log?.transactionHash || null
   };
 
   try {
