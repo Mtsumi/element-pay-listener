@@ -28,9 +28,15 @@ async function handleOrderCreated(...args) {
     });
     console.log("✅ OrderCreated forwarded:", res.data);
   } catch (err) {
+  if (err.response) {
+    console.error("❌ OrderCreated forwarding failed with status:", err.response.status);
+    console.error("📨 Response data:", err.response.data);
+  } else {
     console.error("❌ OrderCreated forwarding failed:", err.message);
-    console.error("📦 Payload:", payload);
   }
+  console.error("📦 Payload:", payload);
+}
+
 }
 
 async function handleOrderSettled(...args) {
