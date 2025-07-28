@@ -80,7 +80,7 @@ async function handleOrderRefunded(...args) {
   }
 }
 
-// --- Reconnect Logic ---
+// --- Reconnection Logic ---
 function reconnectWithBackoff() {
   if (reconnectAttempts >= MAX_RECONNECTS) {
     console.error("🛑 Max reconnection attempts reached. Exiting.");
