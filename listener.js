@@ -3,105 +3,143 @@ const { ethers } = require('ethers');
 const axios = require('axios');
 const abi = require('./abi.json');
 
-console.log("🚀 Starting listener...");
+let provider, contract;
+let reconnectAttempts = 0;
+const MAX_RECONNECTS = 5;
 
-//  debug api key
-if (process.env.API_KEY) {
-  console.log("🔑 Debug API Key:", process.env.API_KEY)
-  } else {
-  console.log("❌ No API key provided. Exiting...");
-  }
-// WebSocket provider
-const provider = new ethers.WebSocketProvider(process.env.RPC_WS_URL);
-
-provider._websocket?.on?.('open', () => {
-  console.log("📡 WebSocket connected to:", process.env.RPC_WS_URL);
-});
-
-provider._websocket?.on?.('error', (err) => {
-  console.error("❌ WebSocket error:", err.message);
-});
-
-provider._websocket?.on?.('close', (code, reason) => {
-  console.warn(`⚠️ WebSocket closed: ${code} - ${reason}`);
-});
-
-const contract = new ethers.Contract(process.env.CONTRACT_ADDRESS, abi, provider);
-
-setInterval(async () => {
-  const block = await provider.getBlockNumber();
-  console.log("💓 Heartbeat — latest block:", block);
-}, 10000);
-
-
-// OrderCreated listener
-contract.on("OrderCreated", async (...args) => {
-    console.log("whole args", args);
-    const event = args[args.length - 1];
-    console.log("📥 OrderCreated event received");
-    console.log("🔍 Raw event.args:", event.args);
-  
-    try {
-      const payload = {
-        orderId: event.args?.orderId?.toString?.() || "",
-        requester: event.args?.requester || "",
-        token: event.args?.token || "",
-        amount: event.args?.amount?.toString?.() || "0",
-        messageHash: event.args?.messageHash || "",
-        orderType: Number(event.args?.orderType ?? 0),
-        transactionHash: event.log?.transactionHash?.toString() || ""
-      };
-  
-      const res = await axios.post(`${process.env.FASTAPI_BASE_URL}/events/order-created`, payload);
-      console.log("✅ OrderCreated forwarded:", res.data);
-    } catch (err) {
-      console.error("❌ Failed to forward OrderCreated:", err.message);
-      console.error("🧾 Payload that caused error:", err.config?.data);
-    }
-  });
-    
-// OrderSettled listener
-contract.on("OrderSettled", async (...args) => {
+// --- Setup Event Handlers ---
+async function handleOrderCreated(...args) {
   const event = args[args.length - 1];
-  console.log("📥 OrderSettled event received");
-  console.log("🔍 Raw event.args:", event.args);
+  console.log("📥 OrderCreated received:", event.args);
 
   const payload = {
-    orderId: event.args[0],
-    transactionHash: event?.log?.transactionHash || ""
+    orderId: event.args?.orderId?.toString() || "",
+    requester: event.args?.requester || "",
+    token: event.args?.token || "",
+    amount: event.args?.amount?.toString() || "0",
+    messageHash: event.args?.messageHash || "",
+    orderType: Number(event.args?.orderType ?? 0),
+    transactionHash: event.log?.transactionHash?.toString() || ""
+  };
+
+  try {
+    const res = await axios.post(`${process.env.FASTAPI_BASE_URL}/events/order-created`, payload, {
+      headers: { "x-api-key": process.env.API_KEY }
+    });
+    console.log("✅ OrderCreated forwarded:", res.data);
+  } catch (err) {
+  if (err.response) {
+    console.error("❌ OrderCreated forwarding failed with status:", err.response.status);
+    console.error("📨 Response data:", err.response.data);
+  } else {
+    console.error("❌ OrderCreated forwarding failed:", err.message);
+  }
+  console.error("📦 Payload:", payload);
+}
+
+}
+
+async function handleOrderSettled(...args) {
+  const event = args[args.length - 1];
+  console.log("📥 OrderSettled received:", event.args);
+
+  const payload = {
+    orderId: event.args?.orderId || event.args[0],
+    transactionHash: event?.log?.transactionHash || null
   };
 
   try {
     const res = await axios.post(`${process.env.FASTAPI_BASE_URL}/events/order-settled`, payload, {
-      headers: {
-        "x-api-key": process.env.API_KEY,
-      }
+      headers: { "x-api-key": process.env.API_KEY }
     });
     console.log("✅ OrderSettled forwarded:", res.data);
   } catch (err) {
-    console.error("❌ Failed to forward OrderSettled:", err.message);
+    console.error("❌ OrderSettled forwarding failed:", err.message);
     console.error("📦 Payload:", payload);
   }
-});
+}
 
-
-
-// 👉 OrderRefunded listener
-contract.on("OrderRefunded", async (...args) => {
+async function handleOrderRefunded(...args) {
   const event = args[args.length - 1];
-  console.log("📥 OrderRefunded event received");
+
+  console.log("📥 OrderRefunded received:", event.args);
 
   const payload = {
-    orderId: event.args.orderId,
-    transactionHash: event.transactionHash
+    orderId: event.args?.orderId || event.args[0],
+    transactionHash: event?.log?.transactionHash || null
   };
 
   try {
-    const res = await axios.post(`${process.env.FASTAPI_BASE_URL}/events/order-refunded`, payload);
+    const res = await axios.post(`${process.env.FASTAPI_BASE_URL}/events/order-refunded`, payload, {
+      headers: { "x-api-key": process.env.API_KEY }
+    });
     console.log("✅ OrderRefunded forwarded:", res.data);
   } catch (err) {
-    console.error("❌ Failed to forward OrderRefunded:", err.message);
+    console.error("❌ OrderRefunded forwarding failed:", err.message);
+    console.error("📦 Payload:", payload);
   }
+}
+
+// --- Reconnect Logic ---
+function reconnectWithBackoff() {
+  if (reconnectAttempts >= MAX_RECONNECTS) {
+    console.error("🛑 Max reconnection attempts reached. Exiting.");
+    process.exit(1);
+  }
+
+  const delay = Math.min(5000 * 2 ** reconnectAttempts, 30000);
+  console.warn(`🔁 Reconnecting in ${delay / 1000}s... (Attempt ${reconnectAttempts + 1})`);
+  setTimeout(() => {
+    reconnectAttempts++;
+    setupListeners();
+  }, delay);
+}
+
+// --- Setup Listeners ---
+function setupListeners() {
+  console.log("🔧 Initializing provider and listeners...");
+  provider = new ethers.WebSocketProvider(process.env.RPC_WS_URL);
+  contract = new ethers.Contract(process.env.CONTRACT_ADDRESS, abi, provider);
+
+  // Keep-alive
+  provider.on("block", (blockNumber) => {
+    console.log("💓 New block:", blockNumber);
+  });
+
+  provider._websocket?.on("open", () => {
+    reconnectAttempts = 0;
+    console.log("✅ WebSocket connected");
+  });
+
+  provider._websocket?.on("close", (code, reason) => {
+    console.warn(`⚠️ WebSocket closed: ${code} - ${reason}`);
+    reconnectWithBackoff();
+  });
+
+  provider._websocket?.on("error", (err) => {
+    console.error("❌ WebSocket error:", err.message);
+  });
+
+  // Register event listeners
+  contract.on("OrderCreated", handleOrderCreated);
+  contract.on("OrderSettled", handleOrderSettled);
+  contract.on("OrderRefunded", handleOrderRefunded);
+
+  console.log("🟢 Listeners registered. Awaiting events...");
+}
+// ──────────────────────────────────────────────────────────────
+// Health endpoint
+// ──────────────────────────────────────────────────────────────
+const express = require('express');
+const healthApp = express();
+const healthPort = process.env.HEALTH_PORT || 3000;
+
+healthApp.get('/healthz', (_req, res) => {
+  res.json({ status: 'ok' });
 });
 
-console.log("🟢 Event listeners registered. Waiting for events...");
+healthApp.listen(healthPort, () => {
+  console.log(`🩺 Health check listening on port ${healthPort}`);
+});
+
+setupListeners();
