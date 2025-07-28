@@ -127,5 +127,19 @@ function setupListeners() {
 
   console.log("🟢 Listeners registered. Awaiting events...");
 }
+// ──────────────────────────────────────────────────────────────
+// Health endpoint
+// ──────────────────────────────────────────────────────────────
+const express = require('express');
+const healthApp = express();
+const healthPort = process.env.HEALTH_PORT || 3000;
+
+healthApp.get('/healthz', (_req, res) => {
+  res.json({ status: 'ok' });
+});
+
+healthApp.listen(healthPort, () => {
+  console.log(`🩺 Health check listening on port ${healthPort}`);
+});
 
 setupListeners();
