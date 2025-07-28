@@ -26,6 +26,7 @@ async function handleOrderCreated(...args) {
     const res = await axios.post(`${process.env.FASTAPI_BASE_URL}/events/order-created`, payload, {
       headers: { "x-api-key": process.env.API_KEY }
     });
+    
     console.log("✅ OrderCreated forwarded:", res.data);
   } catch (err) {
   if (err.response) {
