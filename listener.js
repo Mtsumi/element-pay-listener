@@ -102,6 +102,10 @@ function setupListeners() {
   provider = new ethers.WebSocketProvider(process.env.RPC_WS_URL);
   contract = new ethers.Contract(process.env.CONTRACT_ADDRESS, abi, provider);
 
+  console.log("👂 Listening for OrderCreated on", contract.address);
+  console.log("Listening with RPC WebSocket URL:", process.env.RPC_WS_URL);
+
+
   // Keep-alive
   provider.on("block", (blockNumber) => {
     console.log("💓 New block:", blockNumber);
