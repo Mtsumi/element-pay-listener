@@ -7,6 +7,9 @@ let provider, contract;
 let reconnectAttempts = 0;
 const MAX_RECONNECTS = 5;
 
+let lastBlockTime = Date.now();
+
+
 // --- Setup Event Handlers ---
 async function handleOrderCreated(...args) {
   const event = args[args.length - 1];
@@ -106,7 +109,17 @@ function setupListeners() {
   // Keep-alive
   provider.on("block", (blockNumber) => {
     console.log("💓 New block:", blockNumber);
+    lastBlockTime = Date.now();
   });
+
+  // Reconnect if no blocks are received for 60s
+  setInterval(() => {
+    if (Date.now() - lastBlockTime > 60000) {
+      console.warn("⚠️ No blocks for 60s. Forcing reconnect...");
+      provider.destroy?.(); // ethers v6
+      setupListeners(); // Reinitialize
+    }
+  }, 30000);
 
   provider._websocket?.on("open", () => {
     reconnectAttempts = 0;
@@ -138,8 +151,14 @@ const healthApp = express();
 const healthPort = process.env.HEALTH_PORT || 3000;
 
 healthApp.get('/healthz', (_req, res) => {
-  res.json({ status: 'ok' });
+  const isStale = Date.now() - lastBlockTime > 60000;
+  res.json({
+    status: isStale ? 'stale' : 'ok',
+    lastBlock: lastBlockTime,
+    uptime: process.uptime(),
+  });
 });
+
 
 healthApp.listen(healthPort, () => {
   console.log(`🩺 Health check listening on port ${healthPort}`);
