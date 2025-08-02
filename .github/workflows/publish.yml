@@ -20,8 +20,9 @@ jobs:
           file: Dockerfile
           push: true
           tags: |
-            elementpay/epay-listeners:latest
             elementpay/epay-listeners:${{ github.ref_name }}
+            elementpay/epay-listeners:${{ github.sha }}
+            elementpay/epay-listeners:${{ github.ref_name }}-${{ github.sha }}
       - name: Dispatch deploy event to infra
         uses: peter-evans/repository-dispatch@v3
         with:
