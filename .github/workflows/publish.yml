@@ -2,7 +2,7 @@ name: Publish Listeners
 
 on:
   push:
-    branches: [ dev, main ]
+    branches: [ dev, main, staging ]
 
 jobs:
   build-and-push:
