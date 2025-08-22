@@ -1,5 +1,6 @@
 require('dotenv').config();
 const { ethers } = require('ethers');
+const { createHmac } = require('node:crypto');
 const axios = require('axios');
 const abi = require('./abi.json');
 
@@ -9,7 +10,30 @@ const MAX_RECONNECTS = 5;
 
 let lastBlockTime = Date.now();
 
+const FASTAPI_BASE_URL = process.env.FASTAPI_BASE_URL;
+const LISTENER_SECRET  = process.env.LISTENER_WEBHOOK_SECRET;
 
+function signBody(timestamp, rawBody) {
+  const mac = createHmac('sha256', Buffer.from(LISTENER_SECRET, 'utf8'))
+    .update(`${timestamp}.${rawBody}`, 'utf8')
+    .digest('hex');
+  return `v1=${mac}`;
+}
+
+async function postSigned(path, payload) {
+  const ts  = Math.floor(Date.now() / 1000).toString();
+  const raw = JSON.stringify(payload);
+  const sig = signBody(ts, raw);
+
+  return axios.post(`${FASTAPI_BASE_URL}${path}`, raw, {
+    headers: {
+      'Content-Type': 'application/json',
+      'X-EP-Timestamp': ts,
+      'X-EP-Signature': sig,
+      'X-EP-Client': 'listener',
+    },
+  });
+}
 // --- Setup Event Handlers ---
 async function handleOrderCreated(...args) {
   const event = args[args.length - 1];
@@ -26,9 +50,7 @@ async function handleOrderCreated(...args) {
   };
 
   try {
-    const res = await axios.post(`${process.env.FASTAPI_BASE_URL}/events/order-created`, payload, {
-      headers: { "x-api-key": process.env.API_KEY }
-    });
+    const res = await postSigned("/events/order-created", payload);
 
     console.log("✅ OrderCreated forwarded:", res.data);
   } catch (err) {
@@ -53,9 +75,7 @@ async function handleOrderSettled(...args) {
   };
 
   try {
-    const res = await axios.post(`${process.env.FASTAPI_BASE_URL}/events/order-settled`, payload, {
-      headers: { "x-api-key": process.env.API_KEY }
-    });
+    const res = await postSigned("/events/order-settled", payload);
     console.log("✅ OrderSettled forwarded:", res.data);
   } catch (err) {
     console.error("❌ OrderSettled forwarding failed:", err.message);
@@ -74,9 +94,7 @@ async function handleOrderRefunded(...args) {
   };
 
   try {
-    const res = await axios.post(`${process.env.FASTAPI_BASE_URL}/events/order-refunded`, payload, {
-      headers: { "x-api-key": process.env.API_KEY }
-    });
+    const res = await postSigned("/events/order-refunded", payload);
     console.log("✅ OrderRefunded forwarded:", res.data);
   } catch (err) {
     console.error("❌ OrderRefunded forwarding failed:", err.message);
